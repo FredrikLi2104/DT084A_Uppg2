@@ -15,72 +15,55 @@ def initialize_camera(camera_index=0):
 
 	
 
-def low_pass_filter(img):
-	# image in frequency domain
-	F = np.fft.fft2(img)
+def high_pass_filter(img):
+	
+	# Compute the 2 dimensional discrete Fourier Transform
+	G = np.fft.fft2(img)
+	# Shifts the zero frequency component to the center of the spectrum.
+	# If array = [0, 1, 2, 3, 4, 5, 6, 7] then after shift it is
+	# [-3, -2, -1, 0, 1, 2, 3]
+	G_shift = np.fft.fftshift(G)
 
-	Fshift = np.fft.fftshift(F)
-	plt.imshow(np.log1p(np.abs(F)), cmap = 'gray')
-	plt.axis('off')
-	plt.show()
+	# M is nr of tuples in img and N is the index of the tuples.
+	M, N = img.shape
+	
+	D0 = 30
+	# Creates an array of evenly spaced values of the tuples with their corresponding
+	# values, 1 step between all starting at index 0.
+	u = np.arange(M)
+	v = np.arange(N)
 
+	# Creates a coordinate matrice of the arrays v and u
+	U, V = np.meshgrid(v, u)
 
+	# (U - N/2 and V - M/2) shifts the origin to the center of the image.
+	# np.sqrt(...) calculates the Euclidean distance of each frquency component
+	# from the center.
+	# Low frequencies are near the center and high frequencies are farther from the center
+	# The distance D helps define which frequencies to keep or remove. 
+	D = np.sqrt((U - N/2)**2 + (V - M/2)**2)
 
-	M,N = img.shape
-	H = np.zeros((M,N), dtype=np.float32)
-	D0 = 50
-	for u in range(M):
-		for v in range(N):
-			D = np.sqrt((u-M/2)**2 + (v-N/2)**2)
-			if D <= D0:
-				H[u,v] = 1
-			else:
-				H[u,v] = 0
+	# D > D0 keeps only the frequencies higher than specified D0 according to D.
+	# This in order to keep high frequencies as per high pass filter.
+	H = np.float32(D > D0)
 
-	plt.imshow(H, cmap='gray')
-	plt.axis('off')
-	plt.show()
+	
 
-	# Ideal Low Pass Filter
-	Gshift = Fshift * H
-	G = np.fft.ifftshift(Gshift)
-	plt.imshow(np.log1p(np.abs(Gshift)), cmap='gray')
-	plt.axis('off')
-	plt.show()
-
-	g = np.abs(np.fft.ifft2(G))
-	plt.imshow(g, cmap='gray')
-	plt.axis('off')
-	plt.show()
-
-
-	# High Pass Filter
-	H = 1 - H
-
-	plt.imshow(H, cmap='gray')
-	plt.axis('off')
-	plt.show()
-
-
-	# Ideal High Pass Filter
-	Gshift = Fshift * H
-	plt.imshow(np.log1p(np.abs(Gshift)), cmap='gray')
-	plt.axis('off')
-	plt.show()
-
-
-	# Inverse Fourier Transform
-	G = np.fft.ifftshift(Gshift)
-	plt.imshow(np.log1p(np.abs(G)), cmap='gray')
-	plt.axis('off')
-	plt.show()
-
-	g = np.abs(np.fft.ifft2(G))
-	plt.imshow(g, cmap='gray')
-	plt.axis('off')
-	plt.show()
-
-	return H
+	# Multiply the transformed image G_shift with the hgh pass filter H
+	G_shift_filtered = G_shift * H
+	
+	# Shifts the frequency spectrum back to its original positioning.
+	# fftshift was done earlier to move lower frequencies to the center
+	# for easier filtering, ifftshift moves them back.
+	f_ishift = np.fft.ifftshift(G_shift_filtered)
+	# ifft2 inverse Fast Fourier transforms it back to an image.
+	img_back = np.fft.ifft2(f_ishift)
+	# takes only the magnitude of the result ensuring valid pixel values.
+	img_back = np.abs(img_back)
+	# normalise scales the image values between black and white to ensure
+	# clearer visualization.
+	img_back = cv2.normalize(img_back, None, 0, 255, cv2.NORM_MINMAX)
+	return np.uint8(img_back)
 
 def process_frame(frame):
 	# Add your processing code here
@@ -105,16 +88,13 @@ def main():
 	BLUE = [255,0,0]
 	print("Camera feed started. Press 'q' to quit.")
 
-	f = cv2.imread('cube.jpg', 0)
-	
-	H = low_pass_filter(f)
-
 
 
 	while True:
 		# Capture frame-by-frame
 		ret, frame = cap.read()
-		
+		gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+		H = high_pass_filter(gray_frame)
 
 		# Check if frame is captured successfully
 		if not ret:
@@ -122,9 +102,9 @@ def main():
 			break
 
 		constant= cv2.copyMakeBorder(frame,300,300,300,300,cv2.BORDER_REFLECT)
-
+		cv2.imshow('Filter', H)
 		# Process the frame with a chosen (set) of functions
-		output_frame = process_frame(frame)
+		#output_frame = process_frame(frame)
         
 		# Display the original frame
 		cv2.imshow('Original Frame', frame)
@@ -133,7 +113,7 @@ def main():
 		cv2.imshow('Olle', constant)
 
 		# Display the processed frame
-		cv2.imshow('Processed Frame', output_frame)
+		#cv2.imshow('Processed Frame', output_frame)
 
 		# Check for 'q' key press to quit the application
 		# waitKey(1) returns -1 if no key is pressed
