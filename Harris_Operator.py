@@ -1,3 +1,4 @@
+# The Harris Operator in this code has been written with the help of chatGPT
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
